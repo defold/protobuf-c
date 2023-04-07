@@ -302,6 +302,14 @@ std::string FieldName(const FieldDescriptor* field) {
   return result;
 }
 
+std::string MethodName(const MethodDescriptor* method) {
+  std::string result = ToLower(method->name());
+  if (kKeywords.count(result) > 0) {
+    result.append("_");
+  }
+  return result;
+}
+
 std::string FieldDeprecated(const FieldDescriptor* field) {
   if (field->options().deprecated()) {
     return " PROTOBUF_C__DEPRECATED";

@@ -98,6 +98,8 @@ char* FastHexToBuffer(int i, char* buffer);
 // anyway, so normally this just returns field->name().
 std::string FieldName(const FieldDescriptor* field);
 
+std::string MethodName(const MethodDescriptor* method);
+
 // Get macro string for deprecated field
 std::string FieldDeprecated(const FieldDescriptor* field);
 

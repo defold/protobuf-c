@@ -104,7 +104,7 @@ void ServiceGenerator::GenerateVfuncs(io::Printer* printer)
 		 "  ProtobufCService base;\n");
   for (int i = 0; i < descriptor_->method_count(); i++) {
     const MethodDescriptor *method = descriptor_->method(i);
-    std::string lcname = CamelToLower(method->name());
+    std::string lcname = FieldName(CamelToLower(method->name()));
     vars_["method"] = lcname;
     vars_["metpad"] = ConvertToSpaces(lcname);
     vars_["input_typename"] = FullNameToC(method->input_type()->full_name(), method->input_type()->file());
@@ -131,7 +131,7 @@ void ServiceGenerator::GenerateInitMacros(io::Printer* printer)
 		 "    { $ucfullname$__BASE_INIT");
   for (int i = 0; i < descriptor_->method_count(); i++) {
     const MethodDescriptor *method = descriptor_->method(i);
-    std::string lcname = CamelToLower(method->name());
+    std::string lcname = FieldName(CamelToLower(method->name()));
     vars_["method"] = lcname;
     vars_["metpad"] = ConvertToSpaces(lcname);
     printer->Print(vars_,
@@ -144,7 +144,7 @@ void ServiceGenerator::GenerateCallersDeclarations(io::Printer* printer)
 {
   for (int i = 0; i < descriptor_->method_count(); i++) {
     const MethodDescriptor *method = descriptor_->method(i);
-    std::string lcname = CamelToLower(method->name());
+    std::string lcname = FieldName(CamelToLower(method->name()));
     std::string lcfullname = FullNameToLower(descriptor_->full_name(), descriptor_->file());
     vars_["method"] = lcname;
     vars_["metpad"] = ConvertToSpaces(lcname);
@@ -266,7 +266,7 @@ void ServiceGenerator::GenerateCallersImplementations(io::Printer* printer)
 {
   for (int i = 0; i < descriptor_->method_count(); i++) {
     const MethodDescriptor *method = descriptor_->method(i);
-    std::string lcname = CamelToLower(method->name());
+    std::string lcname = FieldName(CamelToLower(method->name()));
     std::string lcfullname = FullNameToLower(descriptor_->full_name(), descriptor_->file());
     vars_["method"] = lcname;
     vars_["metpad"] = ConvertToSpaces(lcname);

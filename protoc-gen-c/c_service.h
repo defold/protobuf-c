@@ -32,7 +32,8 @@
 //  Based on original Protocol Buffers design by
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
-// Copyright (c) 2008-2013, Dave Benson.  All rights reserved.
+// Copyright (c) 2008-2025, Dave Benson and the protobuf-c authors.
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -60,59 +61,41 @@
 
 // Modified to implement C code by Dave Benson.
 
-#ifndef GOOGLE_PROTOBUF_COMPILER_C_ENUM_H__
-#define GOOGLE_PROTOBUF_COMPILER_C_ENUM_H__
+#ifndef PROTOBUF_C_PROTOC_GEN_C_C_SERVICE_H__
+#define PROTOBUF_C_PROTOC_GEN_C_C_SERVICE_H__
 
+#include <map>
 #include <string>
+
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/io/printer.h>
 
-namespace google {
-namespace protobuf {
-  namespace io {
-    class Printer;             // printer.h
-  }
-}
+namespace protobuf_c {
 
-namespace protobuf {
-namespace compiler {
-namespace c {
-
-class EnumGenerator {
+class ServiceGenerator {
  public:
   // See generator.cc for the meaning of dllexport_decl.
-  explicit EnumGenerator(const EnumDescriptor* descriptor,
-                         const std::string& dllexport_decl);
-  ~EnumGenerator();
+  explicit ServiceGenerator(const google::protobuf::ServiceDescriptor* descriptor,
+                            const std::string& dllexport_decl);
+  ~ServiceGenerator();
 
   // Header stuff.
-
-  // Generate header code defining the enum.  This code should be placed
-  // within the enum's package namespace, but NOT within any class, even for
-  // nested enums.
-  void GenerateDefinition(io::Printer* printer);
-
-  void GenerateDescriptorDeclarations(io::Printer* printer);
-
+  void GenerateMainHFile(google::protobuf::io::Printer* printer);
+  void GenerateVfuncs(google::protobuf::io::Printer* printer);
+  void GenerateInitMacros(google::protobuf::io::Printer* printer);
+  void GenerateDescriptorDeclarations(google::protobuf::io::Printer* printer);
+  void GenerateCallersDeclarations(google::protobuf::io::Printer* printer);
 
   // Source file stuff.
+  void GenerateCFile(google::protobuf::io::Printer* printer);
+  void GenerateServiceDescriptor(google::protobuf::io::Printer* printer);
+  void GenerateInit(google::protobuf::io::Printer* printer);
+  void GenerateCallersImplementations(google::protobuf::io::Printer* printer);
 
-  // Generate the ProtobufCEnumDescriptor for this enum
-  void GenerateEnumDescriptor(io::Printer* printer);
-
-  // Generate static initializer for a ProtobufCEnumValue
-  // given the index of the value in the enum.
-  void GenerateValueInitializer(io::Printer *printer, int index);
-
- private:
-  const EnumDescriptor* descriptor_;
-  std::string dllexport_decl_;
-
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(EnumGenerator);
+  const google::protobuf::ServiceDescriptor* descriptor_;
+  std::map<std::string, std::string> vars_;
 };
 
-}  // namespace c
-}  // namespace compiler
-}  // namespace protobuf
+}  // namespace protobuf_c
 
-}  // namespace google
-#endif  // GOOGLE_PROTOBUF_COMPILER_C_ENUM_H__
+#endif  // PROTOBUF_C_PROTOC_GEN_C_C_SERVICE_H__

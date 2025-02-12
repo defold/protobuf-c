@@ -32,7 +32,8 @@
 //  Based on original Protocol Buffers design by
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
-// Copyright (c) 2008-2013, Dave Benson.  All rights reserved.
+// Copyright (c) 2008-2025, Dave Benson and the protobuf-c authors.
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -62,24 +63,25 @@
 
 #include <algorithm>
 #include <map>
-#include <memory>
-#include <protoc-c/c_message.h>
-#include <protoc-c/c_enum.h>
-#include <protoc-c/c_extension.h>
-#include <protoc-c/c_helpers.h>
-#include <google/protobuf/io/printer.h>
+#include <string_view>
+#include <tuple>
+#include <vector>
+
+#include <google/protobuf/descriptor.h>
 #include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/printer.h>
 #include <google/protobuf/wire_format.h>
+
 #include <protobuf-c/protobuf-c.pb.h>
 
-namespace google {
-namespace protobuf {
-namespace compiler {
-namespace c {
+#include "c_enum.h"
+#include "c_extension.h"
+#include "c_helpers.h"
+#include "c_message.h"
 
-// ===================================================================
+namespace protobuf_c {
 
-MessageGenerator::MessageGenerator(const Descriptor* descriptor,
+MessageGenerator::MessageGenerator(const google::protobuf::Descriptor* descriptor,
                                    const std::string& dllexport_decl)
   : descriptor_(descriptor),
     dllexport_decl_(dllexport_decl),
@@ -110,7 +112,7 @@ MessageGenerator::MessageGenerator(const Descriptor* descriptor,
 MessageGenerator::~MessageGenerator() {}
 
 void MessageGenerator::
-GenerateStructTypedef(io::Printer* printer) {
+GenerateStructTypedef(google::protobuf::io::Printer* printer) {
   printer->Print("typedef struct $classname$ $classname$;\n",
                  "classname", FullNameToC(descriptor_->full_name(), descriptor_->file()));
 
@@ -120,7 +122,7 @@ GenerateStructTypedef(io::Printer* printer) {
 }
 
 void MessageGenerator::
-GenerateEnumDefinitions(io::Printer* printer) {
+GenerateEnumDefinitions(google::protobuf::io::Printer* printer) {
   for (int i = 0; i < descriptor_->nested_type_count(); i++) {
     nested_generators_[i]->GenerateEnumDefinitions(printer);
   }
@@ -132,7 +134,7 @@ GenerateEnumDefinitions(io::Printer* printer) {
 
 
 void MessageGenerator::
-GenerateStructDefinition(io::Printer* printer) {
+GenerateStructDefinition(google::protobuf::io::Printer* printer) {
   for (int i = 0; i < descriptor_->nested_type_count(); i++) {
     nested_generators_[i]->GenerateStructDefinition(printer);
   }
@@ -150,7 +152,7 @@ GenerateStructDefinition(io::Printer* printer) {
 
   // Generate the case enums for unions
   for (int i = 0; i < descriptor_->oneof_decl_count(); i++) {
-    const OneofDescriptor *oneof = descriptor_->oneof_decl(i);
+    const google::protobuf::OneofDescriptor* oneof = descriptor_->oneof_decl(i);
     vars["opt_comma"] = ",";
 
     vars["oneofname"] = CamelToUpper(oneof->name());
@@ -160,7 +162,7 @@ GenerateStructDefinition(io::Printer* printer) {
     printer->Indent();
     printer->Print(vars, "$ucclassname$__$oneofname$__NOT_SET = 0,\n");
     for (int j = 0; j < oneof->field_count(); j++) {
-      const FieldDescriptor *field = oneof->field(j);
+      const google::protobuf::FieldDescriptor* field = oneof->field(j);
       vars["fieldname"] = CamelToUpper(field->name());
       vars["fieldnum"] = SimpleItoa(field->number());
       bool isLast = j == oneof->field_count() - 1;
@@ -174,7 +176,7 @@ GenerateStructDefinition(io::Printer* printer) {
     printer->Print(vars, "} $foneofname$Case;\n\n");
   }
 
-  SourceLocation msgSourceLoc;
+  google::protobuf::SourceLocation msgSourceLoc;
   descriptor_->GetSourceLocation(&msgSourceLoc);
   PrintComment (printer, msgSourceLoc.leading_comments);
 
@@ -190,9 +192,9 @@ GenerateStructDefinition(io::Printer* printer) {
   // Generate fields.
   printer->Indent();
   for (int i = 0; i < descriptor_->field_count(); i++) {
-    const FieldDescriptor *field = descriptor_->field(i);
+    const google::protobuf::FieldDescriptor* field = descriptor_->field(i);
     if (field->containing_oneof() == NULL) {
-      SourceLocation fieldSourceLoc;
+      google::protobuf::SourceLocation fieldSourceLoc;
       field->GetSourceLocation(&fieldSourceLoc);
 
       PrintComment (printer, fieldSourceLoc.leading_comments);
@@ -203,7 +205,7 @@ GenerateStructDefinition(io::Printer* printer) {
 
   // Generate unions from oneofs.
   for (int i = 0; i < descriptor_->oneof_decl_count(); i++) {
-    const OneofDescriptor *oneof = descriptor_->oneof_decl(i);
+    const google::protobuf::OneofDescriptor* oneof = descriptor_->oneof_decl(i);
     vars["oneofname"] = CamelToLower(oneof->name());
     vars["foneofname"] = FullNameToC(oneof->full_name(), oneof->file());
 
@@ -211,15 +213,28 @@ GenerateStructDefinition(io::Printer* printer) {
 
     printer->Print("union {\n");
     printer->Indent();
+
+    std::vector<std::tuple<int, std::string_view, const google::protobuf::FieldDescriptor*>> sorted_fds;
+
     for (int j = 0; j < oneof->field_count(); j++) {
-      const FieldDescriptor *field = oneof->field(j);
-      SourceLocation fieldSourceLoc;
+      const google::protobuf::FieldDescriptor* field = oneof->field(j);
+      std::string_view name = field->name();
+      int order = MessageGenerator::GetOneofUnionOrder(field);
+      sorted_fds.push_back({order, name, field});
+    }
+
+    std::sort(sorted_fds.begin(), sorted_fds.end());
+
+    for (const auto& tuple : sorted_fds) {
+      const auto& [order, name, field] = tuple;
+      google::protobuf::SourceLocation fieldSourceLoc;
       field->GetSourceLocation(&fieldSourceLoc);
 
-      PrintComment (printer, fieldSourceLoc.leading_comments);
-      PrintComment (printer, fieldSourceLoc.trailing_comments);
+      PrintComment(printer, fieldSourceLoc.leading_comments);
+      PrintComment(printer, fieldSourceLoc.trailing_comments);
       field_generators_.get(field).GenerateStructMembers(printer);
     }
+
     printer->Outdent();
     printer->Print(vars, "};\n");
   }
@@ -228,7 +243,7 @@ GenerateStructDefinition(io::Printer* printer) {
   printer->Print(vars, "};\n");
 
   for (int i = 0; i < descriptor_->field_count(); i++) {
-    const FieldDescriptor *field = descriptor_->field(i);
+    const google::protobuf::FieldDescriptor* field = descriptor_->field(i);
     if (field->has_default_value()) {
       field_generators_.get(field).GenerateDefaultValueDeclarations(printer);
     }
@@ -236,27 +251,44 @@ GenerateStructDefinition(io::Printer* printer) {
 
   printer->Print(vars, "#define $ucclassname$__INIT \\\n"
 		       " { PROTOBUF_C_MESSAGE_INIT (&$lcclassname$__descriptor) \\\n    ");
+
   for (int i = 0; i < descriptor_->field_count(); i++) {
-    const FieldDescriptor *field = descriptor_->field(i);
+    const google::protobuf::FieldDescriptor* field = descriptor_->field(i);
     if (field->containing_oneof() == NULL) {
       printer->Print(", ");
       field_generators_.get(field).GenerateStaticInit(printer);
     }
   }
+
   for (int i = 0; i < descriptor_->oneof_decl_count(); i++) {
-    const OneofDescriptor *oneof = descriptor_->oneof_decl(i);
+    const google::protobuf::OneofDescriptor* oneof = descriptor_->oneof_decl(i);
     vars["foneofname"] = FullNameToUpper(oneof->full_name(), oneof->file());
+
     // Initialize the case enum
     printer->Print(vars, ", $foneofname$__NOT_SET");
-    // Initialize the union
-    printer->Print(", {0}");
-  }
-  printer->Print(" }\n\n\n");
 
+    // Initialize the union
+    bool want_extra_braces = false;
+    for (int j = 0; j < oneof->field_count(); j++) {
+      const google::protobuf::FieldDescriptor* field = oneof->field(j);
+      if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_STRING &&
+          field->type() == google::protobuf::FieldDescriptor::TYPE_BYTES)
+      {
+        want_extra_braces = true;
+      }
+    }
+    if (want_extra_braces) {
+      printer->Print(", { {0} }");
+    } else {
+      printer->Print(", {0}");
+    }
+  }
+
+  printer->Print(" }\n\n\n");
 }
 
 void MessageGenerator::
-GenerateHelperFunctionDeclarations(io::Printer* printer,
+GenerateHelperFunctionDeclarations(google::protobuf::io::Printer* printer,
 				   bool is_pack_deep,
 				   bool gen_pack,
 				   bool gen_init)
@@ -310,7 +342,7 @@ GenerateHelperFunctionDeclarations(io::Printer* printer,
 }
 
 void MessageGenerator::
-GenerateDescriptorDeclarations(io::Printer* printer) {
+GenerateDescriptorDeclarations(google::protobuf::io::Printer* printer) {
   printer->Print("extern const ProtobufCMessageDescriptor $name$__descriptor;\n",
                  "name", FullNameToLower(descriptor_->full_name(), descriptor_->file()));
 
@@ -322,7 +354,7 @@ GenerateDescriptorDeclarations(io::Printer* printer) {
     enum_generators_[i]->GenerateDescriptorDeclarations(printer);
   }
 }
-void MessageGenerator::GenerateClosureTypedef(io::Printer* printer)
+void MessageGenerator::GenerateClosureTypedef(google::protobuf::io::Printer* printer)
 {
   for (int i = 0; i < descriptor_->nested_type_count(); i++) {
     nested_generators_[i]->GenerateClosureTypedef(printer);
@@ -338,15 +370,15 @@ void MessageGenerator::GenerateClosureTypedef(io::Printer* printer)
 static int
 compare_pfields_by_number (const void *a, const void *b)
 {
-  const FieldDescriptor *pa = *(const FieldDescriptor **)a;
-  const FieldDescriptor *pb = *(const FieldDescriptor **)b;
+  const google::protobuf::FieldDescriptor* pa = *(const google::protobuf::FieldDescriptor**)a;
+  const google::protobuf::FieldDescriptor* pb = *(const google::protobuf::FieldDescriptor**)b;
   if (pa->number() < pb->number()) return -1;
   if (pa->number() > pb->number()) return +1;
   return 0;
 }
 
 void MessageGenerator::
-GenerateHelperFunctionDefinitions(io::Printer* printer,
+GenerateHelperFunctionDefinitions(google::protobuf::io::Printer* printer,
 				  bool is_pack_deep,
 				  bool gen_pack,
 				  bool gen_init)
@@ -427,7 +459,7 @@ GenerateHelperFunctionDefinitions(io::Printer* printer,
 }
 
 void MessageGenerator::
-GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
+GenerateMessageDescriptor(google::protobuf::io::Printer* printer, bool gen_init) {
     std::map<std::string, std::string> vars;
     vars["fullname"] = descriptor_->full_name();
     vars["classname"] = FullNameToC(descriptor_->full_name(), descriptor_->file());
@@ -438,7 +470,7 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
 
     bool optimize_code_size = descriptor_->file()->options().has_optimize_for() &&
         descriptor_->file()->options().optimize_for() ==
-        FileOptions_OptimizeMode_CODE_SIZE;
+        google::protobuf::FileOptions_OptimizeMode_CODE_SIZE;
 
     const ProtobufCMessageOptions opt =
 	    descriptor_->options().GetExtension(pb_c_msg);
@@ -455,14 +487,14 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
     }
 
     for (int i = 0; i < descriptor_->field_count(); i++) {
-      const FieldDescriptor *fd = descriptor_->field(i);
+      const google::protobuf::FieldDescriptor* fd = descriptor_->field(i);
       if (fd->has_default_value()) {
 	field_generators_.get(fd).GenerateDefaultValueImplementations(printer);
       }
     }
 
     for (int i = 0; i < descriptor_->field_count(); i++) {
-      const FieldDescriptor *fd = descriptor_->field(i);
+      const google::protobuf::FieldDescriptor* fd = descriptor_->field(i);
       const ProtobufCFieldOptions opt = fd->options().GetExtension(pb_c_field);
       if (fd->has_default_value()) {
 
@@ -473,36 +505,36 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
 	vars["field_dv_ctype_suffix"] = "";
 	vars["default_value"] = field_generators_.get(fd).GetDefaultValue();
 	switch (fd->cpp_type()) {
-	case FieldDescriptor::CPPTYPE_INT32:
+	case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
 	  vars["field_dv_ctype"] = "int32_t";
 	  break;
-	case FieldDescriptor::CPPTYPE_INT64:
+	case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
 	  vars["field_dv_ctype"] = "int64_t";
 	  break;
-	case FieldDescriptor::CPPTYPE_UINT32:
+	case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
 	  vars["field_dv_ctype"] = "uint32_t";
 	  break;
-	case FieldDescriptor::CPPTYPE_UINT64:
+	case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
 	  vars["field_dv_ctype"] = "uint64_t";
 	  break;
-	case FieldDescriptor::CPPTYPE_FLOAT:
+	case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
 	  vars["field_dv_ctype"] = "float";
 	  break;
-	case FieldDescriptor::CPPTYPE_DOUBLE:
+	case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
 	  vars["field_dv_ctype"] = "double";
 	  break;
-	case FieldDescriptor::CPPTYPE_BOOL:
+	case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
 	  vars["field_dv_ctype"] = "protobuf_c_boolean";
 	  break;
 	  
-	case FieldDescriptor::CPPTYPE_MESSAGE:
+	case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE:
 	  // NOTE: not supported by protobuf
 	  vars["maybe_static"] = "";
 	  vars["field_dv_ctype"] = "{ ... }";
-	  GOOGLE_LOG(DFATAL) << "Messages can't have default values!";
+	  GOOGLE_LOG(FATAL) << "Messages can't have default values!";
 	  break;
-	case FieldDescriptor::CPPTYPE_STRING:
-	  if (fd->type() == FieldDescriptor::TYPE_BYTES || opt.string_as_bytes())
+	case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+	  if (fd->type() == google::protobuf::FieldDescriptor::TYPE_BYTES || opt.string_as_bytes())
 	  {
 	    vars["field_dv_ctype"] = "ProtobufCBinaryData";
 	  }
@@ -514,14 +546,14 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
 	    vars["field_dv_ctype_suffix"] = "[]";
 	  }
 	  break;
-	case FieldDescriptor::CPPTYPE_ENUM:
+	case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
 	  {
-	    const EnumValueDescriptor *vd = fd->default_value_enum();
+	    const google::protobuf::EnumValueDescriptor* vd = fd->default_value_enum();
 	    vars["field_dv_ctype"] = FullNameToC(vd->type()->full_name(), vd->type()->file());
 	    break;
 	  }
 	default:
-	  GOOGLE_LOG(DFATAL) << "Unknown CPPTYPE";
+	  GOOGLE_LOG(FATAL) << "Unknown CPPTYPE";
 	  break;
 	}
 	if (!already_defined)
@@ -534,15 +566,15 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
 	"static const ProtobufCFieldDescriptor $lcclassname$__field_descriptors[$n_fields$] =\n"
 	"{\n");
   printer->Indent();
-  const FieldDescriptor **sorted_fields = new const FieldDescriptor *[descriptor_->field_count()];
+  const google::protobuf::FieldDescriptor **sorted_fields = new const google::protobuf::FieldDescriptor *[descriptor_->field_count()];
   for (int i = 0; i < descriptor_->field_count(); i++) {
     sorted_fields[i] = descriptor_->field(i);
   }
   qsort (sorted_fields, descriptor_->field_count(),
-       sizeof (const FieldDescriptor *), 
+       sizeof(const google::protobuf::FieldDescriptor*), 
        compare_pfields_by_number);
   for (int i = 0; i < descriptor_->field_count(); i++) {
-    const FieldDescriptor *field = sorted_fields[i];
+    const google::protobuf::FieldDescriptor* field = sorted_fields[i];
     field_generators_.get(field).GenerateDescriptorInitializer(printer);
   }
   printer->Outdent();
@@ -627,7 +659,58 @@ GenerateMessageDescriptor(io::Printer* printer, bool gen_init) {
       "};\n");
 }
 
-}  // namespace c
-}  // namespace compiler
-}  // namespace protobuf
-}  // namespace google
+int MessageGenerator::GetOneofUnionOrder(const google::protobuf::FieldDescriptor* fd)
+{
+  auto cpp_type = fd->cpp_type();
+  auto pb_type = fd->type();
+
+  switch (cpp_type) {
+    case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+      if (pb_type == google::protobuf::FieldDescriptor::TYPE_BYTES) {
+        return 1;
+      } else if (pb_type == google::protobuf::FieldDescriptor::TYPE_STRING) {
+        return 4;
+      } else {
+        GOOGLE_LOG(FATAL)
+          << fd->full_name()
+          << ": Unhandled combination of CPPTYPE ("
+          << cpp_type
+          << ") and protobuf type ("
+          << pb_type
+          << ")";
+        return -1;
+      }
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
+      return 2;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
+    case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
+      return 3;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE:
+      return 5;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
+      return 6;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
+    case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
+      return 7;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
+      return 8;
+
+    case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
+      return 9;
+
+    default:
+      GOOGLE_LOG(FATAL)
+        << fd->full_name()
+        << ": Unhandled CPPTYPE "
+        << cpp_type;
+      return -1;
+  }
+}
+
+}  // namespace protobuf_c

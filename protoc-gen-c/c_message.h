@@ -32,7 +32,8 @@
 //  Based on original Protocol Buffers design by
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
-// Copyright (c) 2008-2013, Dave Benson.  All rights reserved.
+// Copyright (c) 2008-2025, Dave Benson and the protobuf-c authors.
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -60,56 +61,77 @@
 
 // Modified to implement C code by Dave Benson.
 
-#ifndef GOOGLE_PROTOBUF_COMPILER_C_FILE_H__
-#define GOOGLE_PROTOBUF_COMPILER_C_FILE_H__
+#ifndef PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_H__
+#define PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_H__
 
 #include <memory>
 #include <string>
-#include <vector>
+
+#include <google/protobuf/io/printer.h>
 #include <google/protobuf/stubs/common.h>
-#include <protoc-c/c_field.h>
 
-namespace google {
-namespace protobuf {
-  class FileDescriptor;        // descriptor.h
-  namespace io {
-    class Printer;             // printer.h
-  }
-}
+#include "c_enum.h"
+#include "c_extension.h"
+#include "c_field.h"
 
-namespace protobuf {
-namespace compiler {
-namespace c {
+namespace protobuf_c {
 
-class EnumGenerator;           // enum.h
-class MessageGenerator;        // message.h
-class ServiceGenerator;        // service.h
-class ExtensionGenerator;      // extension.h
-
-class FileGenerator {
+class MessageGenerator {
  public:
   // See generator.cc for the meaning of dllexport_decl.
-  explicit FileGenerator(const FileDescriptor* file,
-                         const std::string& dllexport_decl);
-  ~FileGenerator();
+  explicit MessageGenerator(const google::protobuf::Descriptor* descriptor,
+                            const std::string& dllexport_decl);
+  ~MessageGenerator();
 
-  void GenerateHeader(io::Printer* printer);
-  void GenerateSource(io::Printer* printer);
+  // Header stuff.
+
+  // Generate typedef.
+  void GenerateStructTypedef(google::protobuf::io::Printer* printer);
+
+  // Generate descriptor prototype
+  void GenerateDescriptorDeclarations(google::protobuf::io::Printer* printer);
+
+  // Generate descriptor prototype
+  void GenerateClosureTypedef(google::protobuf::io::Printer* printer);
+
+  // Generate definitions of all nested enums (must come before class
+  // definitions because those classes use the enums definitions).
+  void GenerateEnumDefinitions(google::protobuf::io::Printer* printer);
+
+  // Generate definitions for this class and all its nested types.
+  void GenerateStructDefinition(google::protobuf::io::Printer* printer);
+
+  // Generate __INIT macro for populating this structure
+  void GenerateStructStaticInitMacro(google::protobuf::io::Printer* printer);
+
+  // Generate standard helper functions declarations for this message.
+  void GenerateHelperFunctionDeclarations(google::protobuf::io::Printer* printer,
+					  bool is_pack_deep,
+					  bool gen_pack,
+					  bool gen_init);
+
+  // Source file stuff.
+
+  // Generate code that initializes the global variable storing the message's
+  // descriptor.
+  void GenerateMessageDescriptor(google::protobuf::io::Printer* printer, bool gen_init);
+  void GenerateHelperFunctionDefinitions(google::protobuf::io::Printer* printer,
+					 bool is_pack_deep,
+					 bool gen_pack,
+					 bool gen_init);
 
  private:
-  const FileDescriptor* file_;
 
-  std::unique_ptr<std::unique_ptr<MessageGenerator>[]> message_generators_;
+  int GetOneofUnionOrder(const google::protobuf::FieldDescriptor *fd);
+
+  const google::protobuf::Descriptor* descriptor_;
+  std::string dllexport_decl_;
+  FieldGeneratorMap field_generators_;
+  std::unique_ptr<std::unique_ptr<MessageGenerator>[]> nested_generators_;
   std::unique_ptr<std::unique_ptr<EnumGenerator>[]> enum_generators_;
-  std::unique_ptr<std::unique_ptr<ServiceGenerator>[]> service_generators_;
   std::unique_ptr<std::unique_ptr<ExtensionGenerator>[]> extension_generators_;
-
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(FileGenerator);
 };
 
-}  // namespace c
-}  // namespace compiler
-}  // namespace protobuf
+}  // namespace protobuf_c
 
-}  // namespace google
-#endif  // GOOGLE_PROTOBUF_COMPILER_C_FILE_H__
+#endif  // PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_H__

@@ -32,7 +32,8 @@
 //  Based on original Protocol Buffers design by
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
-// Copyright (c) 2008-2013, Dave Benson.  All rights reserved.
+// Copyright (c) 2008-2025, Dave Benson and the protobuf-c authors.
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -60,74 +61,28 @@
 
 // Modified to implement C code by Dave Benson.
 
-#ifndef GOOGLE_PROTOBUF_COMPILER_C_FIELD_H__
-#define GOOGLE_PROTOBUF_COMPILER_C_FIELD_H__
+#ifndef PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_FIELD_H__
+#define PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_FIELD_H__
 
-#include <memory>
-#include <google/protobuf/stubs/common.h>
-#include <google/protobuf/descriptor.h>
+#include <map>
+#include <string>
 
-namespace google {
-namespace protobuf {
-  namespace io {
-    class Printer;             // printer.h
-  }
-}
+#include "c_field.h"
 
-namespace protobuf {
-namespace compiler {
-namespace c {
+namespace protobuf_c {
 
-class FieldGenerator {
+class MessageFieldGenerator : public FieldGenerator {
  public:
-  explicit FieldGenerator(const FieldDescriptor *descriptor) : descriptor_(descriptor) {}
-  virtual ~FieldGenerator();
+  explicit MessageFieldGenerator(const google::protobuf::FieldDescriptor* descriptor);
+  ~MessageFieldGenerator();
 
-  // Generate definitions to be included in the structure.
-  virtual void GenerateStructMembers(io::Printer* printer) const = 0;
-
-  // Generate a static initializer for this field.
-  virtual void GenerateDescriptorInitializer(io::Printer* printer) const = 0;
-
-  virtual void GenerateDefaultValueDeclarations(io::Printer* printer) const { }
-  virtual void GenerateDefaultValueImplementations(io::Printer* printer) const { }
-  virtual std::string GetDefaultValue() const = 0;
-
-  // Generate members to initialize this field from a static initializer
-  virtual void GenerateStaticInit(io::Printer* printer) const = 0;
-
-
- protected:
-  void GenerateDescriptorInitializerGeneric(io::Printer* printer,
-                                            bool optional_uses_has,
-                                            const std::string &type_macro,
-                                            const std::string &descriptor_addr) const;
-  const FieldDescriptor *descriptor_;
-
- private:
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(FieldGenerator);
+  // implements FieldGenerator ---------------------------------------
+  void GenerateStructMembers(google::protobuf::io::Printer* printer) const;
+  void GenerateDescriptorInitializer(google::protobuf::io::Printer* printer) const;
+  std::string GetDefaultValue(void) const;
+  void GenerateStaticInit(google::protobuf::io::Printer* printer) const;
 };
 
-// Convenience class which constructs FieldGenerators for a Descriptor.
-class FieldGeneratorMap {
- public:
-  explicit FieldGeneratorMap(const Descriptor* descriptor);
-  ~FieldGeneratorMap();
+}  // namespace protobuf_c
 
-  const FieldGenerator& get(const FieldDescriptor* field) const;
-
- private:
-  const Descriptor* descriptor_;
-  std::unique_ptr<std::unique_ptr<FieldGenerator>[]> field_generators_;
-
-  static FieldGenerator* MakeGenerator(const FieldDescriptor* field);
-
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(FieldGeneratorMap);
-};
-
-}  // namespace c
-}  // namespace compiler
-}  // namespace protobuf
-
-}  // namespace google
-#endif  // GOOGLE_PROTOBUF_COMPILER_C_FIELD_H__
+#endif  // PROTOBUF_C_PROTOC_GEN_C_C_MESSAGE_FIELD_H__

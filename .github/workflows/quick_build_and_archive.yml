@@ -45,7 +45,7 @@ jobs:
           make
 
       - name: Archive Linux
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Linux
           path: |
@@ -79,7 +79,7 @@ jobs:
           nmake install
    
       - name: Archive results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Windows
           path: |

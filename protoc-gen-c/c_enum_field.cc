@@ -32,7 +32,8 @@
 //  Based on original Protocol Buffers design by
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
-// Copyright (c) 2008-2013, Dave Benson.  All rights reserved.
+// Copyright (c) 2008-2025, Dave Benson and the protobuf-c authors.
+// All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -60,70 +61,82 @@
 
 // Modified to implement C code by Dave Benson.
 
-#include <protoc-c/c_message_field.h>
-#include <protoc-c/c_helpers.h>
 #include <google/protobuf/io/printer.h>
 #include <google/protobuf/wire_format.h>
 
-namespace google {
-namespace protobuf {
-namespace compiler {
-namespace c {
+#include "c_enum_field.h"
+#include "c_helpers.h"
 
-using internal::WireFormat;
+namespace protobuf_c {
+
+// TODO(kenton):  Factor out a "SetCommonFieldVariables()" to get rid of
+//   repeat code between this and the other field types.
+void SetEnumVariables(const google::protobuf::FieldDescriptor* descriptor,
+                      std::map<std::string, std::string>* variables) {
+
+  (*variables)["name"] = FieldName(descriptor);
+  (*variables)["type"] = FullNameToC(descriptor->enum_type()->full_name(), descriptor->enum_type()->file());
+  const google::protobuf::EnumValueDescriptor* default_value = descriptor->default_value_enum();
+  (*variables)["default"] = FullNameToUpper(default_value->type()->full_name(), default_value->type()->file())
+                          + "__" + default_value->name();
+  (*variables)["deprecated"] = FieldDeprecated(descriptor);
+}
 
 // ===================================================================
 
-MessageFieldGenerator::
-MessageFieldGenerator(const FieldDescriptor* descriptor)
-  : FieldGenerator(descriptor) {
+EnumFieldGenerator::
+EnumFieldGenerator(const google::protobuf::FieldDescriptor* descriptor)
+  : FieldGenerator(descriptor)
+{
+  SetEnumVariables(descriptor, &variables_);
 }
 
-MessageFieldGenerator::~MessageFieldGenerator() {}
+EnumFieldGenerator::~EnumFieldGenerator() {}
 
-void MessageFieldGenerator::GenerateStructMembers(io::Printer* printer) const
+void EnumFieldGenerator::GenerateStructMembers(google::protobuf::io::Printer* printer) const
 {
-  std::map<std::string, std::string> vars;
-  vars["name"] = FieldName(descriptor_);
-  vars["type"] = FullNameToC(descriptor_->message_type()->full_name(), descriptor_->message_type()->file());
-  vars["deprecated"] = FieldDeprecated(descriptor_);
   switch (descriptor_->label()) {
-    case FieldDescriptor::LABEL_REQUIRED:
-    case FieldDescriptor::LABEL_OPTIONAL:
-      printer->Print(vars, "$type$ *$name$$deprecated$;\n");
+    case google::protobuf::FieldDescriptor::LABEL_REQUIRED:
+      printer->Print(variables_, "$type$ $name$$deprecated$;\n");
       break;
-    case FieldDescriptor::LABEL_REPEATED:
-      printer->Print(vars, "size_t n_$name$$deprecated$;\n");
-      printer->Print(vars, "$type$ **$name$$deprecated$;\n");
+    case google::protobuf::FieldDescriptor::LABEL_OPTIONAL:
+      if (descriptor_->containing_oneof() == NULL && FieldSyntax(descriptor_) == 2)
+        printer->Print(variables_, "protobuf_c_boolean has_$name$$deprecated$;\n");
+      printer->Print(variables_, "$type$ $name$$deprecated$;\n");
+      break;
+    case google::protobuf::FieldDescriptor::LABEL_REPEATED:
+      printer->Print(variables_, "size_t n_$name$$deprecated$;\n");
+      printer->Print(variables_, "$type$ *$name$$deprecated$;\n");
       break;
   }
 }
-std::string MessageFieldGenerator::GetDefaultValue(void) const
+
+std::string EnumFieldGenerator::GetDefaultValue(void) const
 {
-  /* XXX: update when protobuf gets support
-   *   for default-values of message fields.
-   */
-  return "NULL";
+  return variables_.find("default")->second;
 }
-void MessageFieldGenerator::GenerateStaticInit(io::Printer* printer) const
+void EnumFieldGenerator::GenerateStaticInit(google::protobuf::io::Printer* printer) const
 {
   switch (descriptor_->label()) {
-    case FieldDescriptor::LABEL_REQUIRED:
-    case FieldDescriptor::LABEL_OPTIONAL:
-      printer->Print("NULL");
+    case google::protobuf::FieldDescriptor::LABEL_REQUIRED:
+      printer->Print(variables_, "$default$");
       break;
-    case FieldDescriptor::LABEL_REPEATED:
+    case google::protobuf::FieldDescriptor::LABEL_OPTIONAL:
+      if (FieldSyntax(descriptor_) == 2)
+        printer->Print(variables_, "0, ");
+      printer->Print(variables_, "$default$");
+      break;
+    case google::protobuf::FieldDescriptor::LABEL_REPEATED:
+      // no support for default?
       printer->Print("0,NULL");
       break;
   }
 }
-void MessageFieldGenerator::GenerateDescriptorInitializer(io::Printer* printer) const
+
+void EnumFieldGenerator::GenerateDescriptorInitializer(google::protobuf::io::Printer* printer) const
 {
-  std::string addr = "&" + FullNameToLower(descriptor_->message_type()->full_name(), descriptor_->message_type()->file()) + "__descriptor";
-  GenerateDescriptorInitializerGeneric(printer, false, "MESSAGE", addr);
+  std::string addr = "&" + FullNameToLower(descriptor_->enum_type()->full_name(), descriptor_->enum_type()->file()) + "__descriptor";
+  GenerateDescriptorInitializerGeneric(printer, true, "ENUM", addr);
 }
 
-}  // namespace c
-}  // namespace compiler
-}  // namespace protobuf
-}  // namespace google
+}  // namespace protobuf_c
